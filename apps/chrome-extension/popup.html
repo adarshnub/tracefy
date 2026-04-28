@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tracefy</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #151612;
+      --fg: #f2f0e8;
+      --muted: #aaa694;
+      --accent: #e8c766;
+      --line: #36372f;
+      --input: #202118;
+    }
+    * { box-sizing: border-box; }
+    body {
+      width: 280px;
+      margin: 0;
+      padding: 14px;
+      background: var(--bg);
+      color: var(--fg);
+      font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+    }
+    h1 {
+      margin: 0 0 4px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 14px; color: var(--muted); }
+    label { display: block; margin: 10px 0 5px; color: var(--muted); }
+    input {
+      width: 100%;
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--input);
+      color: var(--fg);
+      padding: 6px 8px;
+      outline: none;
+    }
+    button {
+      width: 100%;
+      min-height: 34px;
+      margin-top: 12px;
+      border: 1px solid color-mix(in srgb, var(--accent) 70%, white);
+      border-radius: 6px;
+      background: var(--accent);
+      color: #17140a;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .status { min-height: 18px; margin-top: 10px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>Tracefy</h1>
+  <p>Pair this browser with the VS Code bridge.</p>
+  <label for="port">Port</label>
+  <input id="port" inputmode="numeric" placeholder="49152" />
+  <label for="token">Token</label>
+  <input id="token" placeholder="paste token" />
+  <button id="save">Save Pairing</button>
+  <div id="status" class="status"></div>
+  <script src="dist/popup.js"></script>
+</body>
+</html>

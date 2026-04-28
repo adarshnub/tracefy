@@ -1,0 +1,21 @@
+{
+  "name": "tracefy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first context-aware debugging across VS Code, terminal, browser, and code.",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @tracefy/protocol && npm run build -w @tracefy/core && npm run build -w @tracefy/ai && npm run build -w @tracefy/vscode-extension && npm run build -w @tracefy/chrome-extension",
+    "test": "npm run test -w @tracefy/core && npm run test -w @tracefy/ai",
+    "typecheck": "npm run typecheck -w @tracefy/protocol && npm run typecheck -w @tracefy/core && npm run typecheck -w @tracefy/ai && npm run typecheck -w @tracefy/vscode-extension && npm run typecheck -w @tracefy/chrome-extension"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

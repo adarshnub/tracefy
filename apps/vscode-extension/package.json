@@ -1,0 +1,65 @@
+{
+  "name": "@tracefy/vscode-extension",
+  "displayName": "Tracefy",
+  "description": "Context-aware debugging across VS Code, terminal, browser, and code.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "tracefy",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": ["Debuggers", "Machine Learning"],
+  "activationEvents": [
+    "onCommand:tracefy.startWatching",
+    "onCommand:tracefy.diagnoseCurrentFailure",
+    "onCommand:tracefy.showTimeline",
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "tracefy.startWatching",
+        "title": "Tracefy: Start Watching"
+      },
+      {
+        "command": "tracefy.diagnoseCurrentFailure",
+        "title": "Tracefy: Diagnose Current Failure"
+      },
+      {
+        "command": "tracefy.showTimeline",
+        "title": "Tracefy: Show Timeline"
+      }
+    ],
+    "configuration": {
+      "title": "Tracefy",
+      "properties": {
+        "tracefy.openai.apiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "OpenAI API key. If empty, Tracefy reads `OPENAI_API_KEY` from the extension host environment and otherwise uses a local fallback."
+        },
+        "tracefy.openai.model": {
+          "type": "string",
+          "default": "gpt-5.2",
+          "description": "OpenAI model used for root-cause diagnosis."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@tracefy/ai": "0.1.0",
+    "@tracefy/core": "0.1.0",
+    "@tracefy/protocol": "0.1.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.99.0",
+    "@types/ws": "^8.5.13"
+  }
+}

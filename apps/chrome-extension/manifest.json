@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Tracefy Browser Bridge",
+  "version": "0.1.0",
+  "description": "Captures browser runtime signals and sends them to the local Tracefy VS Code extension.",
+  "permissions": ["storage"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "Tracefy",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "dist/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["dist/pageBridge.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

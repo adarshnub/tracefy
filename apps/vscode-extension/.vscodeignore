@@ -1,0 +1,12 @@
+src/**
+tsconfig.json
+*.tsbuildinfo
+node_modules/**
+dist/**
+!dist/extension.js
+!dist/extension.js.map
+.tracefy/**
+*.vsix
+npm-debug.log
+yarn.lock
+pnpm-lock.yaml

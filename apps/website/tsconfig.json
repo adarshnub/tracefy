@@ -5,7 +5,13 @@
     "declaration": false,
     "incremental": true,
     "jsx": "preserve",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "es2022"
+    ],
     "module": "ESNext",
+    "moduleResolution": "Bundler",
     "noEmit": true,
     "plugins": [
       {
@@ -14,7 +20,8 @@
     ],
     "rootDir": ".",
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true
   },
   "include": [
     "next-env.d.ts",

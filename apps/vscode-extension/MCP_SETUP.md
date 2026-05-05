@@ -1,12 +1,12 @@
 # Tracefy MCP Setup
 
-Tracefy can share its consolidated debugging context with Cursor or Codex through a local MCP server. This replaces the manual copy/paste flow: the agent asks Tracefy for the latest captured context when you tell it to.
+Tracefy can share its consolidated debugging context with Cursor, Codex, or Claude Code through a local MCP server. This replaces the manual copy/paste flow: the agent asks Tracefy for the latest captured context when you tell it to.
 
 ## Do I Need To Run The MCP Server?
 
 Usually, no.
 
-For normal users, install the Tracefy VSIX and run `Tracefy: Configure MCP for Cursor/Codex`. Tracefy writes the MCP config for Cursor and gives you the Codex config snippet. Cursor or Codex starts the MCP server automatically when the agent needs it.
+For normal users, install the Tracefy VSIX and run `Tracefy: Configure MCP for Cursor/Codex/Claude Code`. Tracefy writes the MCP config for Cursor and Claude Code, then gives you the Codex config snippet. Your agent starts the MCP server automatically when it needs it.
 
 You only need to run build commands manually if you are developing Tracefy from this repository instead of using a packaged VSIX.
 
@@ -15,12 +15,13 @@ You only need to run build commands manually if you are developing Tracefy from 
 1. Install the Tracefy VSIX in Cursor or VS Code.
 2. Open the project you want to debug.
 3. Run `Tracefy: Start Watching` if Tracefy is not already watching.
-4. Run `Tracefy: Configure MCP for Cursor/Codex`.
+4. Run `Tracefy: Configure MCP for Cursor/Codex/Claude Code`.
 5. For Cursor, Tracefy writes `.cursor/mcp.json` in the current workspace.
-6. For Codex, Tracefy copies a TOML snippet to your clipboard. Add that snippet to your Codex MCP config.
-7. Restart Cursor/Codex if it does not detect the new MCP server immediately.
-8. Reproduce a browser, terminal, or diagnostic failure.
-9. Ask your agent something like: `Use Tracefy context to debug the latest failure.`
+6. For Claude Code, Tracefy writes `.mcp.json` in the current workspace.
+7. For Codex, Tracefy copies a TOML snippet to your clipboard. Add that snippet to your Codex MCP config.
+8. Restart Cursor, Codex, or Claude Code if it does not detect the new MCP server immediately.
+9. Reproduce a browser, terminal, or diagnostic failure.
+10. Ask your agent something like: `Use Tracefy context to debug the latest failure.`
 
 Tracefy writes MCP-readable data under `.tracefy/` in your workspace. That folder is local-only and should stay gitignored.
 
@@ -39,7 +40,7 @@ Then launch the extension development host or install the locally packaged VSIX:
 npm run package:vscode
 ```
 
-After that, run `Tracefy: Configure MCP for Cursor/Codex` from the command palette.
+After that, run `Tracefy: Configure MCP for Cursor/Codex/Claude Code` from the command palette.
 
 ## Cursor Config
 
@@ -60,7 +61,30 @@ Tracefy creates this file automatically:
 }
 ```
 
-You normally do not need to edit it. If you move the workspace or reinstall Tracefy, run `Tracefy: Configure MCP for Cursor/Codex` again.
+You normally do not need to edit it. If you move the workspace or reinstall Tracefy, run `Tracefy: Configure MCP for Cursor/Codex/Claude Code` again.
+
+## Claude Code Config
+
+Tracefy creates or updates this file automatically:
+
+```json
+{
+  "mcpServers": {
+    "tracefy": {
+      "command": "node",
+      "args": [
+        "PATH_TO_TRACEFY_MCP_SERVER",
+        "--workspace",
+        "PATH_TO_YOUR_WORKSPACE"
+      ]
+    }
+  }
+}
+```
+
+Claude Code may ask you to approve project MCP servers the first time it sees `.mcp.json`. After approval, run `/mcp` inside Claude Code to confirm `tracefy` is connected.
+
+Because this generated file contains local absolute paths, do not commit it unless your team intentionally wants a shared project MCP config.
 
 ## Codex Config
 
@@ -100,8 +124,9 @@ Use Tracefy recent events and diagnosis before suggesting a fix.
 
 - If the agent says Tracefy has no context, reproduce a failure after Tracefy starts watching.
 - If Cursor does not show the server, restart Cursor and check `.cursor/mcp.json`.
+- If Claude Code does not show the server, restart Claude Code, approve the project MCP prompt, then run `/mcp`.
 - If Codex does not show the server, confirm the copied TOML snippet is in the active Codex MCP config.
-- If the server path is missing, rebuild or reinstall Tracefy, then rerun `Tracefy: Configure MCP for Cursor/Codex`.
+- If the server path is missing, rebuild or reinstall Tracefy, then rerun `Tracefy: Configure MCP for Cursor/Codex/Claude Code`.
 - If terminal failures are missing, make sure VS Code shell integration is enabled for the terminal.
 
 ## Privacy

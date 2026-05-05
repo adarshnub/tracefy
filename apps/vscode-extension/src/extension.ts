@@ -16,6 +16,10 @@ import { JsonlEventStore } from "./eventStore";
 import { TerminalCapture } from "./terminalCapture";
 import { TracefyChatPanel } from "./webview";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 class TracefyRuntime {
   private readonly workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   private readonly events = new EventBuffer();
@@ -413,18 +417,16 @@ class TracefyRuntime {
       return;
     }
 
-    const cursorConfigUri = vscode.Uri.file(path.join(this.workspaceRoot, ".cursor", "mcp.json"));
-    const cursorConfig = {
-      mcpServers: {
-        tracefy: {
-          command: "node",
-          args: [mcpServerPath, "--workspace", this.workspaceRoot]
-        }
-      }
+    const serverConfig = {
+      command: "node",
+      args: [mcpServerPath, "--workspace", this.workspaceRoot]
     };
 
-    await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(cursorConfigUri.fsPath)));
-    await vscode.workspace.fs.writeFile(cursorConfigUri, Buffer.from(`${JSON.stringify(cursorConfig, null, 2)}\n`, "utf8"));
+    const cursorConfigUri = vscode.Uri.file(path.join(this.workspaceRoot, ".cursor", "mcp.json"));
+    const claudeCodeConfigUri = vscode.Uri.file(path.join(this.workspaceRoot, ".mcp.json"));
+
+    await this.upsertMcpServer(cursorConfigUri, serverConfig);
+    await this.upsertMcpServer(claudeCodeConfigUri, serverConfig);
 
     const paths = tracefyExportPaths(this.workspaceRoot);
     const codexSnippet = [
@@ -435,8 +437,40 @@ class TracefyRuntime {
 
     await vscode.env.clipboard.writeText(codexSnippet);
     vscode.window.showInformationMessage(
-      `Tracefy MCP configured for Cursor at .cursor/mcp.json. Codex config snippet copied to clipboard. Context will be read from ${paths.dir}.`
+      `Tracefy MCP configured for Cursor and Claude Code. Codex config snippet copied to clipboard. Context will be read from ${paths.dir}.`
     );
+  }
+
+  private async upsertMcpServer(
+    configUri: vscode.Uri,
+    serverConfig: { command: string; args: string[] }
+  ): Promise<void> {
+    const existing = await this.readJsonObject(configUri);
+    const existingServers = isRecord(existing.mcpServers) ? existing.mcpServers : {};
+    const next = {
+      ...existing,
+      mcpServers: {
+        ...existingServers,
+        tracefy: serverConfig
+      }
+    };
+
+    await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(configUri.fsPath)));
+    await vscode.workspace.fs.writeFile(configUri, Buffer.from(`${JSON.stringify(next, null, 2)}\n`, "utf8"));
+  }
+
+  private async readJsonObject(uri: vscode.Uri): Promise<Record<string, unknown>> {
+    try {
+      const bytes = await vscode.workspace.fs.readFile(uri);
+      const parsed = JSON.parse(Buffer.from(bytes).toString("utf8"));
+      return isRecord(parsed) ? parsed : {};
+    } catch (error) {
+      const code = isRecord(error) ? error.code : undefined;
+      if (code === "FileNotFound" || code === "ENOENT") {
+        return {};
+      }
+      throw error;
+    }
   }
 
   private async resolveMcpServerPath(): Promise<string | undefined> {

@@ -12,7 +12,7 @@ Tracefy is a local-first debugging assistant for JavaScript developers. It watch
 - Start watching automatically and let the user choose whether Tracefy should ask before diagnosing or diagnose automatically.
 - Batch multiple pending failures into one diagnosis request.
 - Copy Tracefy context for other agents using `Tracefy: Copy Agent Context`.
-- Expose captured context to Cursor/Codex agents through a local read-only MCP server.
+- Expose captured context to Cursor, Codex, and Claude Code agents through a local read-only MCP server.
 
 ## Commands
 
@@ -20,7 +20,7 @@ Tracefy is a local-first debugging assistant for JavaScript developers. It watch
 - `Tracefy: Show Timeline`
 - `Tracefy: Diagnose Current Failure`
 - `Tracefy: Copy Agent Context`
-- `Tracefy: Configure MCP for Cursor/Codex`
+- `Tracefy: Configure MCP for Cursor/Codex/Claude Code`
 
 ## Setup
 
@@ -40,11 +40,11 @@ Tracefy opens as a right-side webview panel with a draggable chat surface. You c
 
 When a suggested fix includes code changes, Tracefy shows the unified diff under `Code Diff`. Patch application is intentionally manual in this preview.
 
-## Cursor/Codex MCP
+## Agent MCP
 
-Run `Tracefy: Configure MCP for Cursor/Codex`. The command writes `.cursor/mcp.json` for Cursor and copies the equivalent Codex config snippet to your clipboard.
+Run `Tracefy: Configure MCP for Cursor/Codex/Claude Code`. The command writes `.cursor/mcp.json` for Cursor, writes `.mcp.json` for Claude Code, and copies the equivalent Codex config snippet to your clipboard.
 
-Normal users do not need to start the MCP server manually. Cursor or Codex starts it from the generated config when the agent needs Tracefy context.
+Normal users do not need to start the MCP server manually. Cursor, Codex, or Claude Code starts it from the generated config when the agent needs Tracefy context.
 
 After configuration, ask your agent to use Tracefy context. The MCP server exposes:
 

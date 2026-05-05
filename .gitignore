@@ -1,10 +1,12 @@
 node_modules/
+.next/
 dist/
 out/
 .vscode-test/
 *.vsix
 *.zip
 .tracefy/
+.tracefy-dev/
 .env
 .env.*
 !.env.example

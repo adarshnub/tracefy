@@ -60,7 +60,7 @@
       },
       {
         "command": "tracefy.configureMcp",
-        "title": "Tracefy: Configure MCP for Cursor/Codex"
+        "title": "Tracefy: Configure MCP for Cursor/Codex/Claude Code"
       }
     ],
     "configuration": {

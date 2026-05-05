@@ -14,7 +14,10 @@
     "typecheck": "npm run build -w @tracefy/protocol && npm run build -w @tracefy/core && npm run build -w @tracefy/ai && npm run build -w @tracefy/mcp && npm run typecheck -w @tracefy/protocol && npm run typecheck -w @tracefy/core && npm run typecheck -w @tracefy/ai && npm run typecheck -w @tracefy/mcp && npm run typecheck -w tracefy && npm run typecheck -w @tracefy/chrome-extension",
     "package:vscode": "npm run build && npm run package -w tracefy",
     "package:chrome": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-chrome-bridge.ps1",
-    "package:release": "npm run build && npm run package -w tracefy && npm run package:chrome"
+    "package:release": "npm run build && npm run package -w tracefy && npm run package:chrome",
+    "website:dev": "npm run dev -w @tracefy/website",
+    "website:build": "npm run build -w @tracefy/website",
+    "website:start": "npm run start -w @tracefy/website"
   },
   "devDependencies": {
     "@vscode/vsce": "^3.9.0",

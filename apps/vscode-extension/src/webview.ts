@@ -1,35 +1,42 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 import type { ContextPacket, PairingInfo, TracefyDiagnosis, TracefyEvent } from "@tracefy/protocol";
+import type { TracefyChatMessage } from "@tracefy/ai";
 
-export class TracefyPanel {
+export type TracefyDiagnosisMode = "ask" | "automatic";
+
+export type TracefyPanelState = {
+  events: TracefyEvent[];
+  diagnosis?: TracefyDiagnosis;
+  context?: ContextPacket;
+  pairing?: PairingInfo;
+  hasFailure?: boolean;
+  diagnosisMode?: TracefyDiagnosisMode;
+  pendingFailureCount?: number;
+  chatMessages?: TracefyChatMessage[];
+};
+
+export class TracefyChatPanel {
   private panel?: vscode.WebviewPanel;
-  private lastState?: {
-    events: TracefyEvent[];
-    diagnosis?: TracefyDiagnosis;
-    context?: ContextPacket;
-    pairing?: PairingInfo;
-  };
+  private lastState: TracefyPanelState = { events: [] };
 
-  constructor(private readonly extensionUri: vscode.Uri) {}
+  constructor(
+    private readonly extensionUri: vscode.Uri,
+    private readonly onDiagnose: () => void,
+    private readonly onChat: (message: string) => void
+  ) {}
 
-  show(state: {
-    events: TracefyEvent[];
-    diagnosis?: TracefyDiagnosis;
-    context?: ContextPacket;
-    pairing?: PairingInfo;
-  }): void {
-    this.lastState = state;
+  reveal(state?: TracefyPanelState): void {
+    if (state) {
+      this.lastState = state;
+    }
+
     if (!this.panel) {
-      this.panel = vscode.window.createWebviewPanel(
-        "tracefy.timeline",
-        "Tracefy",
-        vscode.ViewColumn.Beside,
-        {
-          enableScripts: true,
-          localResourceRoots: [this.extensionUri]
-        }
-      );
+      this.panel = vscode.window.createWebviewPanel("tracefy.chat", "Tracefy", vscode.ViewColumn.Beside, {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [this.extensionUri]
+      });
 
       this.panel.onDidDispose(() => {
         this.panel = undefined;
@@ -38,34 +45,44 @@ export class TracefyPanel {
       this.panel.webview.onDidReceiveMessage((message) => {
         if (message?.type === "openFile" && typeof message.path === "string") {
           void this.openWorkspaceFile(message.path, message.line);
+          return;
+        }
+
+        if (message?.type === "diagnose") {
+          this.onDiagnose();
+          return;
+        }
+
+        if (message?.type === "copyAgentContext") {
+          void vscode.commands.executeCommand("tracefy.copyAgentContext");
+          return;
+        }
+
+        if (message?.type === "chat" && typeof message.message === "string") {
+          this.onChat(message.message);
         }
       });
     }
 
-    this.panel.webview.html = this.render(this.panel.webview, state);
+    this.renderCurrentView();
     this.panel.reveal(vscode.ViewColumn.Beside);
   }
 
-  update(state: {
-    events: TracefyEvent[];
-    diagnosis?: TracefyDiagnosis;
-    context?: ContextPacket;
-    pairing?: PairingInfo;
-  }): void {
+  update(state: TracefyPanelState): void {
     this.lastState = state;
-    if (!this.panel) {
-      return;
-    }
-
-    this.panel.webview.html = this.render(this.panel.webview, state);
-  }
-
-  isOpen(): boolean {
-    return Boolean(this.panel);
+    this.renderCurrentView();
   }
 
   dispose(): void {
     this.panel?.dispose();
+  }
+
+  private renderCurrentView(): void {
+    if (!this.panel) {
+      return;
+    }
+
+    this.panel.webview.html = renderHtml(this.panel.webview, this.lastState);
   }
 
   private async openWorkspaceFile(relativePath: string, line?: number): Promise<void> {
@@ -83,20 +100,20 @@ export class TracefyPanel {
       editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
     }
   }
+}
 
-  private render(webview: vscode.Webview, state: {
-    events: TracefyEvent[];
-    diagnosis?: TracefyDiagnosis;
-    context?: ContextPacket;
-    pairing?: PairingInfo;
-  }): string {
-    const nonce = createNonce();
-    const events = state.events.slice(-40).reverse();
-    const diagnosis = state.diagnosis;
-    const context = state.context;
-    const pairing = state.pairing;
+function renderHtml(webview: vscode.Webview, state: TracefyPanelState): string {
+  const nonce = createNonce();
+  const events = state.events.slice(-40).reverse();
+  const diagnosis = state.diagnosis;
+  const context = state.context;
+  const pairing = state.pairing;
+  const hasFailure = state.hasFailure ?? false;
+  const diagnosisMode = state.diagnosisMode ?? "ask";
+  const pendingFailureCount = state.pendingFailureCount ?? 0;
+  const chatMessages = state.chatMessages ?? [];
 
-    return `<!doctype html>
+  return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -105,156 +122,324 @@ export class TracefyPanel {
   <title>Tracefy</title>
   <style>
     :root {
-      --trace-bg: var(--vscode-editor-background);
-      --trace-fg: var(--vscode-editor-foreground);
-      --trace-muted: var(--vscode-descriptionForeground);
-      --trace-border: color-mix(in srgb, var(--vscode-editor-foreground) 18%, transparent);
-      --trace-accent: var(--vscode-charts-yellow);
-      --trace-danger: var(--vscode-errorForeground);
-      --trace-ok: var(--vscode-testing-iconPassed);
-      --trace-panel: color-mix(in srgb, var(--vscode-editor-background) 84%, var(--vscode-editor-foreground) 16%);
-      --trace-code: var(--vscode-textCodeBlock-background);
+      --bg: var(--vscode-editor-background);
+      --fg: var(--vscode-editor-foreground);
+      --muted: var(--vscode-descriptionForeground);
+      --border: color-mix(in srgb, var(--vscode-editor-foreground) 14%, transparent);
+      --panel: color-mix(in srgb, var(--vscode-editor-background) 86%, var(--vscode-editor-foreground) 14%);
+      --panel-2: color-mix(in srgb, var(--vscode-editor-background) 78%, var(--vscode-editor-foreground) 22%);
+      --accent: var(--vscode-charts-yellow);
+      --danger: var(--vscode-errorForeground);
+      --link: var(--vscode-textLink-foreground);
+      --code: var(--vscode-textCodeBlock-background);
+      --input: var(--vscode-input-background);
+      --input-border: var(--vscode-input-border);
     }
 
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 0;
-      background: var(--trace-bg);
-      color: var(--trace-fg);
+      min-height: 100vh;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 13%, transparent), transparent 34%),
+        radial-gradient(circle at 82% 16%, color-mix(in srgb, var(--link) 10%, transparent), transparent 25%),
+        var(--bg);
+      color: var(--fg);
       font: 13px/1.45 var(--vscode-font-family);
     }
 
-    .shell {
-      display: grid;
-      grid-template-columns: minmax(240px, 34%) minmax(0, 1fr);
-      min-height: 100vh;
-    }
-
-    aside {
-      border-right: 1px solid var(--trace-border);
+    .stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
       padding: 18px;
-      overflow: auto;
-      background:
-        linear-gradient(90deg, color-mix(in srgb, var(--trace-accent) 12%, transparent), transparent 56%),
-        var(--trace-bg);
     }
 
-    main { padding: 18px 20px 32px; overflow: auto; }
-    h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: 0; }
-    h1 { font-size: 20px; }
-    h2 { font-size: 13px; color: var(--trace-muted); text-transform: uppercase; margin: 22px 0 10px; }
-    h3 { font-size: 15px; margin-bottom: 8px; }
-    p { margin: 0 0 10px; }
+    .console {
+      position: absolute;
+      inset: 18px;
+      min-width: 320px;
+      min-height: 420px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--bg) 92%, black 8%);
+      box-shadow: 0 18px 60px color-mix(in srgb, black 45%, transparent);
+      overflow: hidden;
+    }
 
-    .status {
+    .topbar {
+      cursor: move;
       display: flex;
-      gap: 8px;
       align-items: center;
-      margin-top: 10px;
-      color: var(--trace-muted);
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 44px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%);
+      user-select: none;
     }
 
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: var(--trace-ok);
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--trace-ok) 18%, transparent);
+    .brand {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .mark {
+      width: 10px;
+      height: 10px;
+      border-radius: 99px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
       flex: 0 0 auto;
     }
 
-    .pairing, .empty, .diagnosis, .evidence, .diff {
-      border: 1px solid var(--trace-border);
-      background: var(--trace-panel);
-      border-radius: 6px;
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 14px; font-weight: 700; letter-spacing: 0; }
+    h2 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+    h3 { font-size: 13px; margin-bottom: 6px; }
+
+    .meta {
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .chip-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chip {
+      min-height: 22px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 1px 8px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--panel) 80%, transparent);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .content {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(220px, 32%) minmax(0, 1fr);
+    }
+
+    .rail {
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+      border-right: 1px solid var(--border);
+      background: color-mix(in srgb, var(--panel) 35%, transparent);
+    }
+
+    .chat {
+      min-height: 0;
+      overflow: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card, .bubble {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
       padding: 12px;
     }
 
-    .pairing code, pre {
-      background: var(--trace-code);
-      color: var(--trace-fg);
-      border-radius: 4px;
+    .bubble.assistant {
+      border-left: 3px solid var(--accent);
     }
 
-    .pairing code { padding: 2px 5px; }
+    .bubble.user {
+      margin-left: 24px;
+      background: var(--panel-2);
+    }
+
+    .bubble.system {
+      color: var(--muted);
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+    }
 
     .event {
       display: grid;
-      grid-template-columns: 88px 1fr;
-      gap: 10px;
-      padding: 9px 0;
-      border-bottom: 1px solid var(--trace-border);
+      gap: 2px;
+      padding-bottom: 9px;
+      border-bottom: 1px solid var(--border);
     }
 
-    .event:last-child { border-bottom: 0; }
-    .time { color: var(--trace-muted); font-variant-numeric: tabular-nums; }
-    .kind { font-weight: 650; }
-    .kind.error { color: var(--trace-danger); }
-    .message { color: var(--trace-muted); overflow-wrap: anywhere; }
+    .event:last-child { border-bottom: 0; padding-bottom: 0; }
+    .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; }
+    .kind { font-weight: 700; overflow-wrap: anywhere; }
+    .kind.error { color: var(--danger); }
+    .message { color: var(--muted); overflow-wrap: anywhere; }
 
-    .diagnosis {
-      border-left: 3px solid var(--trace-accent);
-      margin-bottom: 14px;
-    }
-
-    .confidence {
-      display: inline-flex;
-      align-items: center;
-      min-height: 20px;
-      padding: 1px 8px;
-      border: 1px solid var(--trace-border);
-      border-radius: 999px;
-      color: var(--trace-muted);
-      margin-left: 8px;
-      font-size: 12px;
-    }
-
-    .evidence-list {
+    .pairing {
       display: grid;
-      gap: 10px;
-      margin: 12px 0;
+      grid-template-columns: auto 1fr;
+      gap: 6px 10px;
     }
 
-    button.link {
-      all: unset;
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    button {
+      min-height: 30px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--accent) 22%, var(--panel));
+      color: var(--fg);
       cursor: pointer;
-      color: var(--vscode-textLink-foreground);
-      overflow-wrap: anywhere;
+      font: inherit;
+      font-weight: 650;
+      padding: 0 11px;
+    }
+
+    button.secondary {
+      background: var(--panel);
+      color: var(--muted);
+    }
+
+    .composer {
+      border-top: 1px solid var(--border);
+      padding: 10px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      background: color-mix(in srgb, var(--panel) 70%, transparent);
+    }
+
+    .send-stack {
+      display: grid;
+      gap: 6px;
+      align-content: start;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 42px;
+      max-height: 130px;
+      resize: vertical;
+      border: 1px solid var(--input-border, var(--border));
+      border-radius: 6px;
+      background: var(--input);
+      color: var(--fg);
+      padding: 10px;
+      font: inherit;
+    }
+
+    pre, code {
+      background: var(--code);
+      color: var(--fg);
+      border-radius: 4px;
     }
 
     pre {
-      margin: 8px 0 0;
-      padding: 12px;
+      max-height: 320px;
       overflow: auto;
-      max-height: 420px;
+      padding: 10px;
       white-space: pre-wrap;
+    }
+
+    code { padding: 2px 5px; overflow-wrap: anywhere; }
+
+    .link {
+      all: unset;
+      color: var(--link);
+      cursor: pointer;
+      overflow-wrap: anywhere;
     }
 
     ul { margin: 8px 0 0 18px; padding: 0; }
 
     @media (max-width: 760px) {
-      .shell { grid-template-columns: 1fr; }
-      aside { border-right: 0; border-bottom: 1px solid var(--trace-border); }
+      .stage { padding: 0; }
+      .console { inset: 0; border-radius: 0; }
+      .content { grid-template-columns: 1fr; }
+      .rail { max-height: 34vh; border-right: 0; border-bottom: 1px solid var(--border); }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <aside>
-      <h1>Tracefy</h1>
-      <div class="status"><span class="dot"></span><span>${pairing ? "Watching browser and terminal signals" : "Timeline ready"}</span></div>
-      ${pairing ? `<h2>Browser Pairing</h2><div class="pairing"><p>Chrome extension bridge:</p><p>Port <code>${pairing.port}</code></p><p>Token <code>${escapeHtml(pairing.token)}</code></p></div>` : ""}
-      <h2>Timeline</h2>
-      ${events.length ? events.map(renderEvent).join("") : `<div class="empty">No events captured yet. Run <strong>Tracefy: Start Watching</strong>, then reproduce a browser or terminal failure.</div>`}
-    </aside>
-    <main>
-      ${diagnosis ? renderDiagnosis(diagnosis) : `<div class="empty"><h3>No diagnosis yet</h3><p>Run <strong>Tracefy: Diagnose Current Failure</strong> after a failure is captured.</p></div>`}
-      ${context ? renderContext(context) : ""}
-    </main>
+  <div class="stage">
+    <section class="console" id="console">
+      <header class="topbar" id="dragHandle">
+        <div class="brand">
+          <span class="mark"></span>
+          <div>
+            <h1>Tracefy</h1>
+            <div class="meta">${pendingFailureCount ? `${pendingFailureCount} pending issue${pendingFailureCount === 1 ? "" : "s"}` : "Context-aware debug chat"}</div>
+          </div>
+        </div>
+        <div class="chip-row">
+          <span class="chip">${diagnosisMode}</span>
+          <span class="chip">${events.length} events</span>
+        </div>
+      </header>
+
+      <main class="content">
+        <aside class="rail">
+          <div class="stack">
+            ${pairing ? `<section class="card"><h2>Browser Pairing</h2><div class="pairing"><span>Port</span><code>${pairing.port}</code><span>Token</span><code>${escapeHtml(pairing.token)}</code></div></section>` : ""}
+            <section class="card">
+              <h2>Timeline</h2>
+              ${events.length ? `<div class="stack">${events.map(renderEvent).join("")}</div>` : `<p class="message">No captured events yet.</p>`}
+            </section>
+          </div>
+        </aside>
+
+        <section class="chat" id="chat">
+          ${renderLeadBubble(hasFailure, diagnosisMode, pendingFailureCount, diagnosis)}
+          ${diagnosis ? renderDiagnosis(diagnosis) : ""}
+          ${chatMessages.map(renderChatMessage).join("")}
+          ${context ? renderContext(context) : ""}
+        </section>
+      </main>
+
+      <form class="composer" id="composer">
+        <textarea id="prompt" placeholder="Ask about the captured failures, logs, code context, or suggested fix..."></textarea>
+        <div class="send-stack">
+          <button type="submit">Send</button>
+          <button type="button" class="secondary" data-copy-agent-context="true">Copy Context</button>
+        </div>
+      </form>
+    </section>
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const consoleEl = document.getElementById("console");
+    const handle = document.getElementById("dragHandle");
+    const chat = document.getElementById("chat");
+
     document.querySelectorAll("[data-open-file]").forEach((button) => {
       button.addEventListener("click", () => {
         vscode.postMessage({
@@ -264,50 +449,124 @@ export class TracefyPanel {
         });
       });
     });
+
+    document.querySelectorAll("[data-diagnose]").forEach((button) => {
+      button.addEventListener("click", () => vscode.postMessage({ type: "diagnose" }));
+    });
+
+    document.querySelectorAll("[data-copy-agent-context]").forEach((button) => {
+      button.addEventListener("click", () => vscode.postMessage({ type: "copyAgentContext" }));
+    });
+
+    document.getElementById("composer").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = document.getElementById("prompt");
+      const message = input.value.trim();
+      if (!message) return;
+      vscode.postMessage({ type: "chat", message });
+      input.value = "";
+    });
+
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+
+    handle.addEventListener("pointerdown", (event) => {
+      dragging = true;
+      startX = event.clientX;
+      startY = event.clientY;
+      const rect = consoleEl.getBoundingClientRect();
+      startLeft = rect.left;
+      startTop = rect.top;
+      handle.setPointerCapture(event.pointerId);
+    });
+
+    handle.addEventListener("pointermove", (event) => {
+      if (!dragging) return;
+      const nextLeft = Math.max(0, Math.min(window.innerWidth - 320, startLeft + event.clientX - startX));
+      const nextTop = Math.max(0, Math.min(window.innerHeight - 220, startTop + event.clientY - startY));
+      consoleEl.style.inset = "auto";
+      consoleEl.style.left = nextLeft + "px";
+      consoleEl.style.top = nextTop + "px";
+      consoleEl.style.width = Math.min(window.innerWidth, consoleEl.offsetWidth) + "px";
+      consoleEl.style.height = Math.min(window.innerHeight, consoleEl.offsetHeight) + "px";
+    });
+
+    handle.addEventListener("pointerup", () => {
+      dragging = false;
+    });
+
+    chat.scrollTop = chat.scrollHeight;
   </script>
 </body>
 </html>`;
+}
+
+function renderLeadBubble(
+  hasFailure: boolean,
+  diagnosisMode: TracefyDiagnosisMode,
+  pendingFailureCount: number,
+  diagnosis: TracefyDiagnosis | undefined
+): string {
+  if (diagnosis) {
+    return `<div class="bubble system">Diagnosis complete. You can ask follow-up questions using the same captured context.</div>`;
   }
+
+  if (hasFailure && diagnosisMode === "ask") {
+    return `<div class="bubble assistant">
+      <h3>${pendingFailureCount || 1} captured issue${pendingFailureCount === 1 ? "" : "s"} ready</h3>
+      <p>Tracefy will send all pending failures together in one diagnosis request.</p>
+      <div class="actions"><button data-diagnose="true">Diagnose together</button></div>
+    </div>`;
+  }
+
+  if (hasFailure) {
+    return `<div class="bubble assistant"><p>Tracefy captured failures and will diagnose them together after the configured delay.</p></div>`;
+  }
+
+  return `<div class="bubble system">Reproduce a browser or terminal failure, then ask Tracefy what happened.</div>`;
 }
 
 function renderDiagnosis(diagnosis: TracefyDiagnosis): string {
-  return `<section class="diagnosis">
-    <h3>${escapeHtml(diagnosis.summary)} <span class="confidence">${diagnosis.confidence}</span></h3>
+  return `<div class="bubble assistant">
+    <h3>${escapeHtml(diagnosis.summary)} <span class="chip">${diagnosis.confidence}</span></h3>
     <p>${escapeHtml(diagnosis.rootCause)}</p>
     <h2>Suggested Fix</h2>
     <p>${escapeHtml(diagnosis.suggestedFix)}</p>
     ${diagnosis.testCommand ? `<h2>Verify</h2><pre>${escapeHtml(diagnosis.testCommand)}</pre>` : ""}
-    ${diagnosis.diff ? `<h2>Patch Preview</h2><pre>${escapeHtml(diagnosis.diff)}</pre>` : ""}
+    ${diagnosis.diff ? `<h2>Code Diff</h2><pre>${escapeHtml(diagnosis.diff)}</pre>` : ""}
     ${diagnosis.risks.length ? `<h2>Risks</h2><ul>${diagnosis.risks.map((risk) => `<li>${escapeHtml(risk)}</li>`).join("")}</ul>` : ""}
-  </section>
-  <h2>Evidence</h2>
-  <div class="evidence-list">
-    ${diagnosis.evidence
-      .map(
-        (item) => `<div class="evidence">
-          <strong>${escapeHtml(item.label)}</strong>
-          <p>${escapeHtml(item.detail)}</p>
-          ${item.file ? `<button class="link" data-open-file="${escapeAttr(item.file)}" data-line="${item.line ?? 1}">${escapeHtml(item.file)}:${item.line ?? 1}</button>` : ""}
-        </div>`
-      )
-      .join("")}
+  </div>
+  <div class="stack">
+    <h2>Evidence</h2>
+    ${diagnosis.evidence.map((item) => `<div class="card">
+      <strong>${escapeHtml(item.label)}</strong>
+      <p>${escapeHtml(item.detail)}</p>
+      ${item.file ? `<button class="link" data-open-file="${escapeAttr(item.file)}" data-line="${item.line ?? 1}">${escapeHtml(item.file)}:${item.line ?? 1}</button>` : ""}
+    </div>`).join("")}
   </div>`;
+}
+
+function renderChatMessage(message: TracefyChatMessage): string {
+  return `<div class="bubble ${message.role}">${renderMarkdownish(message.content)}</div>`;
 }
 
 function renderContext(context: ContextPacket): string {
   const snippets = [context.activeFile, ...context.relevantFiles].filter(Boolean);
-  return `<h2>Selected Code Context</h2>
-    <div class="evidence-list">
-      ${snippets
-        .map(
-          (snippet) => `<div class="evidence">
-            <strong><button class="link" data-open-file="${escapeAttr(snippet!.path)}" data-line="${snippet!.startLine}">${escapeHtml(snippet!.path)}</button></strong>
-            <p>${escapeHtml(snippet!.reason)}</p>
-            <pre>${escapeHtml(snippet!.content.slice(0, 4000))}</pre>
-          </div>`
-        )
-        .join("")}
-    </div>`;
+  if (!snippets.length) {
+    return "";
+  }
+
+  return `<div class="stack">
+    <h2>Selected Code Context</h2>
+    ${snippets.map((snippet) => `<div class="card">
+      <strong><button class="link" data-open-file="${escapeAttr(snippet!.path)}" data-line="${snippet!.startLine}">${escapeHtml(snippet!.path)}</button></strong>
+      <p>${escapeHtml(snippet!.reason)}</p>
+      <pre>${escapeHtml(snippet!.content.slice(0, 4000))}</pre>
+    </div>`).join("")}
+  </div>`;
 }
 
 function renderEvent(event: TracefyEvent): string {
@@ -317,15 +576,18 @@ function renderEvent(event: TracefyEvent): string {
       : "command" in event
         ? `${event.command}${"exitCode" in event && event.exitCode !== undefined ? ` exited ${event.exitCode}` : ""}`
         : event.kind;
-
   const isError = event.kind.includes("error") || (event.kind === "terminal.command.finished" && event.exitCode !== 0);
+
   return `<div class="event">
     <div class="time">${new Date(event.timestamp).toLocaleTimeString()}</div>
-    <div>
-      <div class="kind ${isError ? "error" : ""}">${escapeHtml(event.kind)}</div>
-      <div class="message">${escapeHtml(message)}</div>
-    </div>
+    <div class="kind ${isError ? "error" : ""}">${escapeHtml(event.kind)}</div>
+    <div class="message">${escapeHtml(message)}</div>
   </div>`;
+}
+
+function renderMarkdownish(value: string): string {
+  const escaped = escapeHtml(value);
+  return escaped.replace(/```([\s\S]*?)```/g, (_match, code) => `<pre>${code}</pre>`).replace(/\n/g, "<br>");
 }
 
 function createNonce(): string {

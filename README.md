@@ -32,12 +32,13 @@ Tracefy is a local-first context-aware debugging prototype for VS Code, Chrome, 
 
 5. Start Tracefy:
 
-   - Run `Tracefy: Start Watching`
+   - Tracefy starts watching automatically when Cursor or VS Code opens
+   - Click the Tracefy status bar item or run `Tracefy: Show Timeline`
    - Copy the shown port and token
    - Click the Tracefy Browser Bridge icon in Chrome
    - Paste the port and token
    - Reproduce a browser or terminal error
-   - Run `Tracefy: Diagnose Current Failure`
+   - By default, Tracefy asks before diagnosing
 
 ## What Works In This Slice
 
@@ -50,7 +51,20 @@ Tracefy is a local-first context-aware debugging prototype for VS Code, Chrome, 
 - Local JSONL event storage under `.tracefy/events.jsonl`.
 - Context packet builder with redaction and relevant code snippets.
 - OpenAI Responses API diagnosis client using structured JSON output.
-- VS Code Webview timeline with diagnosis and patch preview.
+- Right-side Tracefy chat panel with timeline, diagnosis, patch preview, and follow-up questions.
+- Automatic watching on startup with configurable diagnosis behavior.
+- Multiple pending failures are sent together in the next diagnosis request.
+- Agent handoff via `Tracefy: Copy Agent Context` or the panel's `Copy Context` button.
+
+## Chat And Diff Flow
+
+Tracefy opens as a right-side webview panel. The panel contains a draggable chat surface, a scrollable event timeline, a chat composer, and diagnosis bubbles.
+
+When a diagnosis includes code changes, Tracefy shows them under `Code Diff`. Patch application is still manual in this version.
+
+If several failures happen before you diagnose, Tracefy batches the pending failures and recent surrounding events into one context packet so the AI can propose one coherent fix.
+
+Use `Tracefy: Copy Agent Context` to copy the latest captured failures, selected code context, diagnosis, and diff so another assistant such as Claude, Codex, or Cursor chat can use the same debugging context.
 
 ## Development
 
@@ -63,6 +77,24 @@ npm test
 To run the VS Code extension, open this repo in VS Code and press `F5` using the `Run Tracefy Extension` launch configuration.
 
 The Chrome extension is in `apps/chrome-extension`. Load it as an unpacked extension and pair it with the port/token shown by `Tracefy: Start Watching`.
+
+## Automation Settings
+
+Tracefy starts automatically by default. You can tune that behavior in Cursor or VS Code settings:
+
+```json
+{
+  "tracefy.autoStart": true,
+  "tracefy.diagnose.mode": "ask",
+  "tracefy.autoDiagnose.delayMs": 1500,
+  "tracefy.autoDiagnose.cooldownMs": 15000,
+  "tracefy.autoDiagnose.openPanel": true
+}
+```
+
+`ask` is the default. Switch `tracefy.diagnose.mode` to `"automatic"` if you want Tracefy to diagnose failures without prompting.
+
+Manual commands are still available when you want to reopen the timeline, show pairing details, or force a fresh diagnosis.
 
 ## Package A Local Release
 

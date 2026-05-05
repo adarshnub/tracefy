@@ -36,6 +36,7 @@
     "onCommand:tracefy.startWatching",
     "onCommand:tracefy.diagnoseCurrentFailure",
     "onCommand:tracefy.showTimeline",
+    "onCommand:tracefy.configureMcp",
     "onStartupFinished"
   ],
   "main": "./dist/extension.js",
@@ -51,7 +52,15 @@
       },
       {
         "command": "tracefy.showTimeline",
-        "title": "Tracefy: Show Timeline"
+        "title": "Tracefy: Open Chat"
+      },
+      {
+        "command": "tracefy.copyAgentContext",
+        "title": "Tracefy: Copy Agent Context"
+      },
+      {
+        "command": "tracefy.configureMcp",
+        "title": "Tracefy: Configure MCP for Cursor/Codex"
       }
     ],
     "configuration": {
@@ -66,12 +75,44 @@
           "type": "string",
           "default": "gpt-5.2",
           "description": "OpenAI model used for root-cause diagnosis."
+        },
+        "tracefy.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start watching browser, terminal, and workspace signals when the extension activates."
+        },
+        "tracefy.diagnose.mode": {
+          "type": "string",
+          "enum": ["ask", "automatic"],
+          "default": "ask",
+          "markdownEnumDescriptions": [
+            "Capture failures and wait for the user to press Diagnose.",
+            "Diagnose captured failures automatically after the configured delay."
+          ],
+          "description": "How Tracefy should handle captured failures."
+        },
+        "tracefy.autoDiagnose.delayMs": {
+          "type": "number",
+          "default": 1500,
+          "minimum": 250,
+          "description": "Delay before automatically diagnosing a new failure, in milliseconds."
+        },
+        "tracefy.autoDiagnose.cooldownMs": {
+          "type": "number",
+          "default": 15000,
+          "minimum": 1000,
+          "description": "Minimum time between automatic diagnoses, in milliseconds."
+        },
+        "tracefy.autoDiagnose.openPanel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically open the Tracefy panel when an automatic diagnosis completes."
         }
       }
     }
   },
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --sourcemap --outfile=dist/extension.js",
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --sourcemap --outfile=dist/extension.js && esbuild ../../packages/mcp/src/index.ts --bundle --platform=node --format=cjs --target=node20 --sourcemap --outfile=dist/mcp-server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "vscode:prepublish": "npm run build",
     "package": "vsce package --no-dependencies",

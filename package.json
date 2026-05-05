@@ -9,9 +9,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @tracefy/protocol && npm run build -w @tracefy/core && npm run build -w @tracefy/ai && npm run build -w tracefy && npm run build -w @tracefy/chrome-extension",
-    "test": "npm run test -w @tracefy/core && npm run test -w @tracefy/ai",
-    "typecheck": "npm run typecheck -w @tracefy/protocol && npm run typecheck -w @tracefy/core && npm run typecheck -w @tracefy/ai && npm run typecheck -w tracefy && npm run typecheck -w @tracefy/chrome-extension",
+    "build": "npm run build -w @tracefy/protocol && npm run build -w @tracefy/core && npm run build -w @tracefy/ai && npm run build -w @tracefy/mcp && npm run build -w tracefy && npm run build -w @tracefy/chrome-extension",
+    "test": "npm run test -w @tracefy/core && npm run test -w @tracefy/ai && npm run test -w @tracefy/mcp",
+    "typecheck": "npm run build -w @tracefy/protocol && npm run build -w @tracefy/core && npm run build -w @tracefy/ai && npm run build -w @tracefy/mcp && npm run typecheck -w @tracefy/protocol && npm run typecheck -w @tracefy/core && npm run typecheck -w @tracefy/ai && npm run typecheck -w @tracefy/mcp && npm run typecheck -w tracefy && npm run typecheck -w @tracefy/chrome-extension",
     "package:vscode": "npm run build && npm run package -w tracefy",
     "package:chrome": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-chrome-bridge.ps1",
     "package:release": "npm run build && npm run package -w tracefy && npm run package:chrome"

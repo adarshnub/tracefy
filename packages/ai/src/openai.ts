@@ -8,6 +8,11 @@ export interface DiagnoseOptions {
   fetchImpl?: typeof fetch;
 }
 
+export interface TracefyChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export const DEFAULT_DIAGNOSIS_MODEL = "gpt-5.2";
 export const DEFAULT_PATCH_MODEL = "gpt-5.2-codex";
 export const DEFAULT_SUMMARY_MODEL = "gpt-5-mini";
@@ -69,6 +74,66 @@ export async function diagnoseContext(
   const json = await response.json();
   const text = extractOutputText(json);
   return validateDiagnosis(JSON.parse(text));
+}
+
+export async function chatWithContext(
+  context: ContextPacket | undefined,
+  messages: TracefyChatMessage[],
+  question: string,
+  options: DiagnoseOptions = {}
+): Promise<string> {
+  if (!options.apiKey) {
+    return "OpenAI is not configured yet. I can still show captured events and local context, but chat answers need `tracefy.openai.apiKey` or `OPENAI_API_KEY`.";
+  }
+
+  const fetcher = options.fetchImpl ?? fetch;
+  const response = await fetcher(options.endpoint ?? "https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${options.apiKey}`
+    },
+    body: JSON.stringify({
+      model: options.model ?? DEFAULT_DIAGNOSIS_MODEL,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text:
+                "You are Tracefy inside a developer IDE. Answer like a concise debugging partner. Use the supplied captured failures, code context, diagnostics, git diff, and prior chat. If code changes are needed, include a unified diff when you have enough evidence."
+            }
+          ]
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: JSON.stringify(
+                {
+                  tracefyContext: context,
+                  priorMessages: messages.slice(-12),
+                  question
+                },
+                null,
+                2
+              )
+            }
+          ]
+        }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`OpenAI chat failed: ${response.status} ${body}`);
+  }
+
+  const json = await response.json();
+  return extractOutputText(json);
 }
 
 export function extractOutputText(response: unknown): string {

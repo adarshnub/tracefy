@@ -1,0 +1,24 @@
+{
+  "name": "@tracefy/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "tracefy-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@tracefy/protocol": "0.1.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@tracefy/core": "0.1.0",
+    "vitest": "^3.2.0"
+  }
+}

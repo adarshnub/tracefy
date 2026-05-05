@@ -40,16 +40,16 @@ export function buildContextPacket(input: ContextBuildInput): ContextPacket | un
   }
 
   const triggerText = JSON.stringify(episode.trigger);
-  const timelineText = episode.events.map((event) => JSON.stringify(event)).join("\n");
+  const timelineText = input.events.map((event) => JSON.stringify(event)).join("\n");
   const pathHints = new Set([...extractPathHints(triggerText), ...extractPathHints(timelineText)]);
-  const relevantFiles = rankRelevantFiles(input.files, pathHints, episode.events).slice(0, 6);
+  const relevantFiles = rankRelevantFiles(input.files, pathHints, input.events).slice(0, 6);
 
   const packet: ContextPacket = {
     episodeId: episode.id,
     createdAt: Date.now(),
     workspaceRoot: input.workspaceRoot,
     trigger: episode.trigger,
-    timeline: episode.events.slice(-25),
+    timeline: input.events.slice(-50),
     activeFile: input.activeFile
       ? toSnippet(input.activeFile, "Active editor when diagnosis was requested")
       : undefined,
@@ -59,6 +59,7 @@ export function buildContextPacket(input: ContextBuildInput): ContextPacket | un
     gitDiff: trimText(redactText(input.gitDiff), 12000),
     notes: [
       "Context is selected locally from recent runtime signals, diagnostics, active editor, package manifest, and git diff.",
+      "The timeline may contain multiple pending failures. Diagnose them together and propose one coherent fix when they share a root cause.",
       "Patch suggestions must be grounded in the evidence above."
     ]
   };
